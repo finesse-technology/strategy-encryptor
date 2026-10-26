@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Bundled TCC compiler -------------------------------------------------
+# The vendored Tiny C Compiler must be committed in full. The generic rules
+# above (e.g. `lib/`, `*.so`) would otherwise hide parts it needs to run
+# (lib/libtcc1-64.a and the *.def import files). Re-include the whole tree.
+!vendor/tcc-win64/lib/
+!vendor/tcc-win64/**
