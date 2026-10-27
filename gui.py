@@ -123,9 +123,9 @@ class MainWindow(QMainWindow):
         layout.addLayout(self._row(self.input_edit, browse_in))
 
         # ---- Strategy name ----
-        layout.addWidget(self._field_label("Strategy name  (import / output name)"))
+        layout.addWidget(self._field_label("Strategy name  (output folder name)"))
         self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("e.g. sm20")
+        self.name_edit.setPlaceholderText("e.g. ladder  — names the output folder only")
         layout.addWidget(self.name_edit)
 
         # ---- Output folder ----
@@ -139,9 +139,6 @@ class MainWindow(QMainWindow):
         browse_out.clicked.connect(self._pick_output)
         layout.addLayout(self._row(self.out_edit, browse_out))
 
-        # ---- Targets ----
-        # A plain card with a normal header label (not a QGroupBox, whose
-        # floating title overlapped the first checkbox).
         targets = QFrame()
         targets.setObjectName("card")
         tlay = QVBoxLayout(targets)
@@ -235,23 +232,21 @@ class MainWindow(QMainWindow):
         if not in_path or not os.path.isfile(in_path):
             return self._warn("Please select a valid .py file.")
         if not name:
-            return self._warn("Please enter a strategy name.")
-        if not name.isidentifier():
+            return self._warn("Please enter a strategy name (used as the folder name).")
+        bad = set('<>:"/\\|?*')
+        if any(c in bad for c in name):
             return self._warn(
-                f"'{name}' is not a valid module name.\n"
-                "Use letters, digits and underscores, not starting with a digit."
+                "The strategy name is used as a folder name, so it can't contain "
+                'any of:  < > : " / \\ | ? *'
             )
         if out_base and not os.path.isdir(out_base):
             return self._warn("The selected output folder does not exist.")
         if not self.chk_pyd.isChecked() and not self.chk_so.isChecked():
             return self._warn("Select at least one build target.")
 
-        # No folder chosen -> default to <strategy-encryptor>/output/<name>.
-        if out_base:
-            self._out_dir = os.path.join(out_base, "output")
-        else:
-            self._out_dir = os.path.join(APP_DIR, "output", name)
-        common = ["--input", in_path, "--output", self._out_dir, "--name", name]
+        base = out_base if out_base else os.path.join(APP_DIR, "output")
+        self._out_dir = os.path.join(base, name)
+        common = ["--input", in_path, "--output", self._out_dir]
 
         jobs = []
         if self.chk_pyd.isChecked():

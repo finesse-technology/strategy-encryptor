@@ -35,9 +35,12 @@ python -m venv .venv
 In the window: pick the `.py` file, enter a **strategy name**, optionally choose
 an **output folder**, tick the build targets, and click **Compile**.
 
-- If you **choose a folder**, files go to `<that folder>/output/<name>.pyd` / `.so`.
+The **strategy name is only the output folder name** — the compiled file keeps
+the Python file's own name (e.g. `ladder.py` → `ladder.cp312-win_amd64.pyd`).
+
+- If you **choose a folder**, files go to `<that folder>\<strategy name>\<pyfile>.pyd` / `.so`.
 - If you **leave it empty**, files go to the default
-  `<strategy-encryptor>\output\<name>\<name>.pyd` / `.so`.
+  `<strategy-encryptor>\output\<strategy name>\<pyfile>.pyd` / `.so`.
 
 Every build is also written to a timestamped file in the `logs\` folder
 (`logs\<timestamp>_<name>.log`), so the full output is kept even after you close

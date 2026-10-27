@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-# Launch the Strategy Encryptor GUI using the project's .venv (Linux / macOS).
 set -e
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
