@@ -18,7 +18,9 @@ import subprocess
 import sys
 
 from PySide6.QtCore import Qt, QThread, Signal, QUrl, QSettings
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QPalette
+from PySide6.QtGui import (
+    QColor, QDesktopServices, QFont, QIcon, QPalette, QPixmap,
+)
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton,
@@ -30,6 +32,7 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONVERT_PY = os.path.join(APP_DIR, "convert.py")
 LOGS_DIR = os.path.join(APP_DIR, "logs")
 CHECK_SVG = os.path.join(APP_DIR, "resources", "check.svg")
+LOGO_SVG = os.path.join(APP_DIR, "resources", "logo.svg")
 
 
 # ---------------------------------------------------------------------------
@@ -83,35 +86,40 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("FinesseBroking", "StrategyEncryptor")
 
         self.setWindowTitle("Strategy Encryptor")
-        self.setMinimumSize(520, 420)
-        self.resize(760, 800)
+        self.setMinimumSize(560, 460)
+        self.resize(820, 860)
+        if os.path.isfile(LOGO_SVG):
+            self.setWindowIcon(QIcon(LOGO_SVG))
 
-        # Everything lives inside a scroll area so the UI stays fully usable at
-        # any window size — if it gets too short, a scrollbar appears instead of
-        # widgets overlapping.
+        central = QWidget()
+        self.setCentralWidget(central)
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ---- Docker-style top app bar ----
+        outer.addWidget(self._build_appbar())
+
+        # Scrollable body — stays usable at any window size (scrollbar appears
+        # instead of widgets overlapping when the window is short).
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setCentralWidget(scroll)
+        outer.addWidget(scroll, stretch=1)
 
         root = QWidget()
         scroll.setWidget(root)
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(28, 24, 28, 20)
+        layout.setContentsMargins(28, 22, 28, 22)
         layout.setSpacing(16)
 
-        # ---- Header ----
-        title = QLabel("Strategy Encryptor")
-        title.setObjectName("title")
-        subtitle = QLabel(
-            "Compile a Python strategy into a protected native module "
-            "(.pyd / .so)."
+        intro = QLabel(
+            "Compile a Python strategy into a protected native module (.pyd / .so)."
         )
-        subtitle.setObjectName("subtitle")
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addWidget(self._hline())
+        intro.setObjectName("subtitle")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
 
         # ---- Input file ----
         layout.addWidget(self._field_label("Strategy file  (.py)"))
@@ -186,11 +194,31 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(STYLESHEET.replace("__CHECK_URL__", check_url))
 
     # ---- small UI helpers ----
-    def _hline(self):
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setObjectName("hline")
-        return line
+    def _build_appbar(self):
+        bar = QFrame()
+        bar.setObjectName("appbar")
+        bar.setFixedHeight(62)
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(22, 0, 22, 0)
+        h.setSpacing(12)
+
+        logo = QLabel()
+        if os.path.isfile(LOGO_SVG):
+            pix = QPixmap(LOGO_SVG)
+            if not pix.isNull():
+                logo.setPixmap(pix.scaled(
+                    30, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        h.addWidget(logo)
+
+        name = QLabel("Strategy Encryptor")
+        name.setObjectName("appTitle")
+        h.addWidget(name)
+        h.addStretch(1)
+
+        tag = QLabel("Finesse")
+        tag.setObjectName("appTag")
+        h.addWidget(tag)
+        return bar
 
     def _field_label(self, text):
         lbl = QLabel(text)
@@ -343,77 +371,87 @@ class MainWindow(QMainWindow):
 
 
 STYLESHEET = """
-* { font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif; }
-QMainWindow, QWidget { background: #0f1218; color: #e6e9ef; }
-#title { font-size: 22px; font-weight: 700; color: #f3f5f9; }
-#subtitle { font-size: 13px; color: #8b93a7; }
-#hline { background: #232a35; max-height: 1px; border: none; }
-#fieldLabel { font-size: 12px; font-weight: 600; color: #9aa3b7; margin-top: 2px; }
+* { font-family: "Roboto", "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif; }
+QMainWindow, QWidget { background: #16181d; color: #e9ecf1; }
+
+QFrame#appbar { background: #1e2127; border: none; border-bottom: 1px solid #2b2f36; }
+#appTitle { font-size: 16px; font-weight: 700; color: #f4f5f7; }
+#appTag { font-size: 12px; font-weight: 600; color: #6e7784; }
+
+#subtitle { font-size: 13px; color: #9ba4b2; }
+#fieldLabel { font-size: 12px; font-weight: 600; color: #aab2bf; margin-top: 2px; }
+
 QLineEdit {
-    background: #171b22; border: 1px solid #2a313d; border-radius: 8px;
-    padding: 10px 12px; font-size: 13px; color: #e6e9ef;
-    selection-background-color: #6366f1; selection-color: #ffffff;
+    background: #22262d; border: 1px solid #343a43; border-radius: 6px;
+    padding: 10px 12px; font-size: 13px; color: #e9ecf1;
+    selection-background-color: #1d63ed; selection-color: #ffffff;
 }
-QLineEdit:focus { border: 1px solid #6366f1; background: #1a1f28; }
-QLineEdit:read-only { color: #c9d0dd; }
+QLineEdit:focus { border: 1px solid #1d63ed; background: #262b33; }
+QLineEdit:read-only { color: #c7ced9; }
+
 QPushButton {
-    background: #20262f; border: 1px solid #323a47; border-radius: 8px;
-    padding: 9px 16px; font-size: 13px; font-weight: 600; color: #d9dee8;
+    background: #262b33; border: 1px solid #3a414b; border-radius: 6px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; color: #dfe3ea;
 }
-QPushButton:hover { background: #28303b; border-color: #3c4557; }
-QPushButton:pressed { background: #1b212a; }
-QPushButton:disabled { color: #5a6270; background: #171b22; border-color: #242b35; }
+QPushButton:hover { background: #2d333c; border-color: #454d59; }
+QPushButton:pressed { background: #20252c; }
+QPushButton:disabled { color: #5c6470; background: #1c2026; border-color: #2a2f37; }
+
 QPushButton#primary {
-    background: #6366f1; border: none; color: #ffffff;
-    padding: 12px 16px; font-size: 14px; font-weight: 700;
+    background: #1d63ed; border: none; color: #ffffff;
+    padding: 12px 18px; font-size: 14px; font-weight: 700;
 }
-QPushButton#primary:hover { background: #7579f5; }
-QPushButton#primary:pressed { background: #4f46e5; }
-QPushButton#primary:disabled { background: #343862; color: #9aa0cf; }
-QScrollArea { background: #0f1218; border: none; }
-QFrame#card { background: #141821; border: 1px solid #262d39; border-radius: 10px; }
-#cardHeader { font-size: 12px; font-weight: 600; color: #9aa3b7; }
+QPushButton#primary:hover { background: #3b7bf0; }
+QPushButton#primary:pressed { background: #1551c4; }
+QPushButton#primary:disabled { background: #27385f; color: #93a6cf; }
+
+QScrollArea { background: #16181d; border: none; }
+QFrame#card { background: #1e2127; border: 1px solid #2b2f36; border-radius: 8px; }
+#cardHeader { font-size: 12px; font-weight: 700; color: #aab2bf; }
+
 QCheckBox { font-size: 13px; font-weight: 500; spacing: 10px; padding: 4px 0;
-    color: #dce1ea; min-height: 24px; }
-QCheckBox:disabled { color: #5a6270; }
-QCheckBox::indicator { width: 20px; height: 20px; border-radius: 5px;
-    border: 1px solid #3a4250; background: #1b2028; }
-QCheckBox::indicator:hover { border: 1px solid #6366f1; }
-QCheckBox::indicator:checked { background: #6366f1; border: 1px solid #6366f1;
+    color: #dfe3ea; min-height: 24px; }
+QCheckBox:disabled { color: #5c6470; }
+QCheckBox::indicator { width: 20px; height: 20px; border-radius: 4px;
+    border: 1px solid #3f4650; background: #22262d; }
+QCheckBox::indicator:hover { border: 1px solid #1d63ed; }
+QCheckBox::indicator:checked { background: #1d63ed; border: 1px solid #1d63ed;
     image: url("__CHECK_URL__"); }
-QCheckBox::indicator:disabled { background: #1a1e26; border: 1px solid #2a313d; }
+QCheckBox::indicator:disabled { background: #1c2026; border: 1px solid #2a2f37; }
+
 QPlainTextEdit#log {
-    background: #0a0d12; color: #c3cad8; border: 1px solid #20262f;
-    border-radius: 10px; padding: 10px;
+    background: #0e1013; color: #c3cad8; border: 1px solid #262b33;
+    border-radius: 8px; padding: 10px;
 }
 QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
-QScrollBar::handle:vertical { background: #333b48; border-radius: 5px; min-height: 24px; }
-QScrollBar::handle:vertical:hover { background: #3f4857; }
+QScrollBar::handle:vertical { background: #353b45; border-radius: 5px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background: #434a56; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-QStatusBar { color: #8b93a7; font-size: 12px; }
-QToolTip { background: #1a1e26; color: #e6e9ef; border: 1px solid #2a313d;
+QStatusBar { background: #1e2127; color: #9ba4b2; font-size: 12px;
+    border-top: 1px solid #2b2f36; }
+QToolTip { background: #22262d; color: #e9ecf1; border: 1px solid #343a43;
     padding: 4px 6px; }
 """
 
 
 def _apply_dark_palette(app):
     pal = QPalette()
-    pal.setColor(QPalette.Window, QColor("#0f1218"))
-    pal.setColor(QPalette.WindowText, QColor("#e6e9ef"))
-    pal.setColor(QPalette.Base, QColor("#171b22"))
-    pal.setColor(QPalette.AlternateBase, QColor("#141821"))
-    pal.setColor(QPalette.Text, QColor("#e6e9ef"))
-    pal.setColor(QPalette.Button, QColor("#20262f"))
-    pal.setColor(QPalette.ButtonText, QColor("#e6e9ef"))
-    pal.setColor(QPalette.Highlight, QColor("#6366f1"))
+    pal.setColor(QPalette.Window, QColor("#16181d"))
+    pal.setColor(QPalette.WindowText, QColor("#e9ecf1"))
+    pal.setColor(QPalette.Base, QColor("#22262d"))
+    pal.setColor(QPalette.AlternateBase, QColor("#1e2127"))
+    pal.setColor(QPalette.Text, QColor("#e9ecf1"))
+    pal.setColor(QPalette.Button, QColor("#262b33"))
+    pal.setColor(QPalette.ButtonText, QColor("#e9ecf1"))
+    pal.setColor(QPalette.Highlight, QColor("#1d63ed"))
     pal.setColor(QPalette.HighlightedText, QColor("#ffffff"))
-    pal.setColor(QPalette.ToolTipBase, QColor("#1a1e26"))
-    pal.setColor(QPalette.ToolTipText, QColor("#e6e9ef"))
-    pal.setColor(QPalette.PlaceholderText, QColor("#6b7280"))
-    pal.setColor(QPalette.Disabled, QPalette.Text, QColor("#5a6270"))
-    pal.setColor(QPalette.Disabled, QPalette.WindowText, QColor("#5a6270"))
-    pal.setColor(QPalette.Disabled, QPalette.ButtonText, QColor("#5a6270"))
+    pal.setColor(QPalette.ToolTipBase, QColor("#22262d"))
+    pal.setColor(QPalette.ToolTipText, QColor("#e9ecf1"))
+    pal.setColor(QPalette.PlaceholderText, QColor("#6e7784"))
+    pal.setColor(QPalette.Disabled, QPalette.Text, QColor("#5c6470"))
+    pal.setColor(QPalette.Disabled, QPalette.WindowText, QColor("#5c6470"))
+    pal.setColor(QPalette.Disabled, QPalette.ButtonText, QColor("#5c6470"))
     app.setPalette(pal)
 
 
@@ -421,6 +459,8 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Strategy Encryptor")
     app.setOrganizationName("FinesseBroking")
+    if os.path.isfile(LOGO_SVG):
+        app.setWindowIcon(QIcon(LOGO_SVG))
     app.setStyle("Fusion")
     _apply_dark_palette(app)
     win = MainWindow()
