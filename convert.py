@@ -1,4 +1,5 @@
 import argparse
+import ast
 import glob
 import os
 import shutil
@@ -14,6 +15,77 @@ def _run(cmd, **kwargs):
     return subprocess.run(cmd, **kwargs)
 
 
+def _rewrite_ternary_tuples(src_text):
+    """Make valid Python that Cython rejects compile, without changing behaviour.
+
+    Cython turns tuple literals into C-level tuples. When a conditional
+    expression (ternary) has tuple branches of different lengths, e.g.
+        x = (a, b) if cond else (c,)
+    the two C-tuple types don't match and Cython refuses — though it's fine
+    Python. This wraps such branch tuples as ``tuple([...])`` (an identical
+    value, but a plain Python object Cython won't C-type).
+
+    Returns the rewritten source, or None if nothing was changed / it can't be
+    parsed (so the caller keeps the original bytes).
+    """
+    if not hasattr(ast, "unparse"):
+        return None
+    try:
+        tree = ast.parse(src_text)
+    except SyntaxError:
+        return None
+
+    class _Fix(ast.NodeTransformer):
+        def __init__(self):
+            self.changed = False
+
+        def _wrap(self, node):
+            if isinstance(node, ast.Tuple):
+                self.changed = True
+                call = ast.Call(
+                    func=ast.Name(id="tuple", ctx=ast.Load()),
+                    args=[ast.List(elts=node.elts, ctx=ast.Load())],
+                    keywords=[],
+                )
+                return ast.copy_location(call, node)
+            return node
+
+        def visit_IfExp(self, node):
+            self.generic_visit(node)
+            node.body = self._wrap(node.body)
+            node.orelse = self._wrap(node.orelse)
+            return node
+
+    fixer = _Fix()
+    new_tree = fixer.visit(tree)
+    if not fixer.changed:
+        return None
+    ast.fix_missing_locations(new_tree)
+    try:
+        return ast.unparse(new_tree)
+    except Exception:  # noqa: BLE001 - unparse failure -> keep original
+        return None
+
+
+def prepare_source(input_path, dest_py):
+    """Copy input_path -> dest_py, auto-adapting constructs that are valid Python
+    but that Cython cannot compile (see _rewrite_ternary_tuples). The user's
+    original file is never modified; only this temp copy is changed."""
+    rewritten = None
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            rewritten = _rewrite_ternary_tuples(f.read())
+    except (OSError, UnicodeDecodeError):
+        rewritten = None
+
+    if rewritten is not None:
+        with open(dest_py, "w", encoding="utf-8") as f:
+            f.write(rewritten)
+        print("  note: auto-adapted ternary tuple literals for Cython compatibility.")
+    else:
+        shutil.copyfile(input_path, dest_py)
+
+
 def _ensure_cython():
     try:
         import Cython  # noqa: F401
@@ -23,14 +95,28 @@ def _ensure_cython():
 
 def cython_to_c(src_py, out_c):
     """Transpile .py -> .c. Pure Python; needs NO C compiler."""
-    result = _run([
+    cmd = [
         sys.executable, "-m", "cython", src_py,
         "-3",
         "-X", "annotation_typing=False",
         "-o", out_c,
-    ])
+    ]
+    print("  $ " + " ".join(str(c) for c in cmd))
+    # Capture so the real Cython error always reaches the log (inherited stderr
+    # can get lost when launched under pythonw.exe from the GUI).
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    for stream in (result.stdout, result.stderr):
+        if stream:
+            print(stream if stream.endswith("\n") else stream + "\n", end="")
     if result.returncode != 0 or not os.path.isfile(out_c):
-        sys.exit("ERROR: Cython transpile (.py -> .c) failed.")
+        sys.exit(
+            "ERROR: Cython transpile (.py -> .c) failed — see the Cython message above.\n"
+            "  If it says 'Incompatible types in conditional expression', the strategy has\n"
+            "  a ternary returning tuples of different lengths, e.g.\n"
+            "      x = (a, b) if cond else (c,)\n"
+            "  Cython can't type that. Use lists in the strategy instead (same behaviour):\n"
+            "      x = [a, b] if cond else [c]"
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -93,7 +179,7 @@ def build_native_tcc(input_path, module_name, output_dir):
 
     with tempfile.TemporaryDirectory() as workdir:
         local_src = os.path.join(workdir, module_name + ".py")
-        shutil.copyfile(input_path, local_src)
+        prepare_source(input_path, local_src)
 
         # 1) .py -> .c  (pure Cython, no compiler)
         c_path = os.path.join(workdir, module_name + ".c")
@@ -144,7 +230,7 @@ def build_native_setuptools(input_path, module_name, output_dir):
     print(f"Compiling via setuptools -> {'.pyd' if os.name == 'nt' else '.so'}")
     with tempfile.TemporaryDirectory() as workdir:
         local_src = os.path.join(workdir, module_name + ".py")
-        shutil.copyfile(input_path, local_src)
+        prepare_source(input_path, local_src)
 
         # Point the committed setup_build.py at our copied source via env var,
         # and run it in the temp dir so generated .c/build files land there.
